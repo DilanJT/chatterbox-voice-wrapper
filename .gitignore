@@ -1,0 +1,15 @@
+# environment + downloaded models (rebuilt by `make setup`)
+.venv/
+.models/
+__pycache__/
+*.pyc
+
+# personal audio: voice samples and generated voiceovers stay local
+voices/*
+!voices/README.md
+VoiceOvers/*
+!VoiceOvers/.gitkeep
+logs/
+
+.DS_Store
+Thumbs.db
