@@ -39,6 +39,30 @@ Then:
 
 An NVIDIA GPU is detected automatically (`nvidia-smi`). To force a build: `make setup TORCH=cpu` or `make setup TORCH=cu124`.
 
+## Web UI
+
+```bash
+make ui
+```
+
+Opens an ElevenLabs-style page at <http://127.0.0.1:7860> (Ctrl+C in the terminal stops it; `make ui UI_PORT=7861` for another port).
+
+- **Voice**: every sample in `voices/` is listed, with a ▶ preview. Drop a new file in and press the reload icon.
+- **Model**: Standard (Emotion + Pace sliders) or Turbo (faster, sound/style tags). Format MP3/WAV, optional seed.
+- **Tags**: click a chip to insert it at the cursor. Tags that work with the selected model are highlighted purple; ones it can't use are red and get removed when generating.
+
+| Model | Tags | What they do |
+|---|---|---|
+| Standard | `[neutral]` `[calm]` `[serious]` `[warm]` `[confident]` `[happy]` `[excited]` `[dramatic]` | Change emotion/pace **from that point on**. `[neutral]` goes back to the slider values |
+| Turbo | `[narration]` `[advertisement]` `[happy]` `[surprised]` `[sarcastic]` `[angry]` `[fear]` `[crying]` `[dramatic]` `[whispering]` | Style tokens Turbo was trained with, passed through as written (results vary by voice) |
+| Turbo | `[laugh]` `[chuckle]` `[sigh]` `[gasp]` `[cough]` `[clear throat]` `[sniff]` `[groan]` `[shush]` | Non-speech sounds at that spot |
+| Both | `[pause]` `[long pause]` | 0.6 s / 1.2 s of silence |
+
+Each generation shows a progress bar (per sentence chunk), then plays in the bottom player. Files land in `VoiceOvers/` as `<voice>_<first words>.mp3` and show up under **History**.
+
+**Cancel** (or Esc) stops a generation immediately. The model runs in its own process, which Cancel kills, so all its memory is returned right away. The next generation reloads it (~30 s). The model is also unloaded after 10 minutes without work (`VOICE_TOOL_UI_IDLE_MIN`), and when you stop `make ui`. If you reload the page mid-generation, it picks the job back up so you can still cancel it.
+The UI loads its own copy of the model, separate from the Claude MCP server.
+
 ## Commands
 
 | Command | What it does |
@@ -50,6 +74,7 @@ An NVIDIA GPU is detected automatically (`nvidia-smi`). To force a build: `make 
 | `make register` / `make unregister` | Add or remove the MCP server in Claude |
 | `make doctor` | Show OS, GPU, device, voices, ffmpeg, Claude config path |
 | `make speak TEXT="Hello there" ARGS="--emotion 0.7 --mp3"` | Generate from the terminal |
+| `make ui` | Web UI at http://127.0.0.1:7860 (`UI_PORT=7861` to change) |
 | `make clean` / `make clean-all` | Delete `.venv` / also delete the models |
 
 On Windows without make, swap `make <cmd>` for `setup.bat <cmd>`.
@@ -90,6 +115,7 @@ Speeding audio up afterwards (atempo) can make it sound mechanical. Prefer re-ge
 | `VOICE_TOOL_DEVICE` | auto | Force `cuda`, `mps` or `cpu` |
 | `VOICE_TOOL_WATERMARK` | `0` | `1` keeps Resemble's inaudible Perth watermark (off by default) |
 | `VOICE_TOOL_PRELOAD` | `0` | `1` loads the model when the MCP server starts |
+| `VOICE_TOOL_UI_IDLE_MIN` | `10` | Web UI unloads the model after this many idle minutes |
 | `HF_HOME` | `.models/` | Where model weights are stored |
 
 ## Notes and troubleshooting
@@ -107,6 +133,8 @@ Speeding audio up afterwards (atempo) can make it sound mechanical. Prefer re-ge
 voice_core.py      synthesis (device detection, chunking, emotion per segment, wav/mp3 export)
 voice_mcp.py       MCP server (FastMCP, stdio)
 speak.py           command-line generator
+voice_ui.py        web UI server (Starlette) + tag parsing
+ui/index.html      the web UI page (no build step, no CDN)
 requirements.txt   Python deps (torch is installed separately per platform)
 scripts/manage.py  setup/install/models/test/register/doctor (stdlib only)
 scripts/bootstrap.sh|ps1  install uv, then run manage.py with Python 3.11

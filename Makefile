@@ -9,7 +9,7 @@ else
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help setup install models test register unregister doctor speak clean clean-all
+.PHONY: help setup install models test register unregister doctor speak ui clean clean-all
 
 help:
 	@echo voice-tool commands:
@@ -21,10 +21,11 @@ help:
 	@echo   make unregister  remove it from Claude
 	@echo   make doctor      show OS, GPU, device, voices, ffmpeg
 	@echo   make speak TEXT="Hello" ARGS="--emotion 0.7 --mp3"
+	@echo   make ui          open the web UI at http://127.0.0.1:7860, UI_PORT=7861 to change the port
 	@echo   make clean       delete .venv    /    make clean-all  also delete models
 	@echo Options: TORCH=cpu or cu124 to force a PyTorch build, SKIP_MODELS=1 to skip downloads
 
-setup install models test register unregister doctor clean clean-all:
+setup install models test register unregister doctor ui clean clean-all:
 	$(BOOT) $@
 
 speak:

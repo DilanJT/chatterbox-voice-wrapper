@@ -155,8 +155,9 @@ def _out_path(output_dir, filename, ext):
 
 
 def synthesize(segments, engine="standard", voice="", output_dir="", filename="",
-               fmt="wav", pace=0.5, seed=0, default_emotion=0.5, gap=0.2):
-    """segments: list of dicts {text, emotion?, pause_after?}. Returns a result dict."""
+               fmt="wav", pace=0.5, seed=0, default_emotion=0.5, gap=0.2, progress=None):
+    """segments: list of dicts {text, emotion?, pace?, pause_after?}. Returns a result dict.
+    progress: optional callback(done_chunks, total_chunks), called once the model is ready and after each chunk."""
     import torch, torchaudio
     engine = (engine or "standard").lower()
     fmt = (fmt or "wav").lower().lstrip(".")
@@ -168,6 +169,10 @@ def synthesize(segments, engine="standard", voice="", output_dir="", filename=""
         pieces = []
         if seed:
             torch.manual_seed(int(seed))
+        total = sum(len(chunk_text(seg.get("text") or "")) for seg in segments if (seg.get("text") or "").strip())
+        done = 0
+        if progress:
+            progress(done, total)
         for seg in segments:
             text = (seg.get("text") or "").strip()
             if not text:
@@ -181,8 +186,11 @@ def synthesize(segments, engine="standard", voice="", output_dir="", filename=""
                     if engine == "turbo":
                         wav = model.generate(chunk)
                     else:
-                        wav = model.generate(chunk, exaggeration=emotion, cfg_weight=float(pace))
+                        wav = model.generate(chunk, exaggeration=emotion, cfg_weight=float(seg.get("pace", pace)))
                 pieces.append(wav.detach().cpu().float())
+                done += 1
+                if progress:
+                    progress(done, total)
                 last = i == len(chunks) - 1
                 pause = float(seg.get("pause_after", 0.35)) if last else gap
                 if pause > 0:

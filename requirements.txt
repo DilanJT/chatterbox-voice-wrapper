@@ -3,3 +3,5 @@ chatterbox-tts==0.1.7
 mcp[cli]>=1.9,<2
 setuptools<81          # resemble-perth imports pkg_resources
 imageio-ffmpeg>=0.5    # bundled ffmpeg for MP3 export on any OS
+starlette>=0.40        # web UI (voice_ui.py); already installed as part of mcp
+uvicorn>=0.30

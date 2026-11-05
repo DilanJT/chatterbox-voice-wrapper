@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>voice-tool</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --panel: #ffffff; --ink: #0b0b0f; --ink-2: #55565e; --ink-3: #8c8d96;
+    --line: #e7e7ea; --line-2: #d9d9de; --soft: #f2f2f4; --accent: #0b0b0f;
+    --tag: #ece8ff; --tag-ink: #4b32c3; --bad: #ffe1e1; --bad-ink: #b42318; --warn: #fff6e0; --warn-ink: #8a5a00;
+    --radius: 14px; --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .logo { width: 26px; height: 26px; border-radius: 8px; background: var(--ink); display: grid; place-items: center; }
+  .logo span { display: flex; gap: 2px; align-items: center; }
+  .logo i { display: block; width: 2px; background: #fff; border-radius: 2px; }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  header .sub { color: var(--ink-3); font-size: 13px; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; padding: 20px 24px 110px; max-width: 1320px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+
+  /* editor */
+  .editor-card { display: flex; flex-direction: column; min-height: calc(100vh - 170px); }
+  .tags { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .tag-row .label { width: 54px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
+  .chip { border: 1px solid var(--line-2); background: var(--panel); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; color: var(--ink-2); transition: background .12s, border-color .12s; }
+  .chip:hover { background: var(--soft); border-color: var(--ink-3); color: var(--ink); }
+  .tag-hint { color: var(--ink-3); font-size: 12px; }
+
+  .editor { position: relative; flex: 1; min-height: 320px; }
+  .editor textarea, .backdrop .hl {
+    font: 17px/1.65 var(--font); letter-spacing: normal; padding: 20px 22px; margin: 0; border: 0;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; tab-size: 4;
+  }
+  .editor textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; outline: none;
+    background: transparent; color: var(--ink); overflow-y: auto; z-index: 1; }
+  .editor textarea::placeholder { color: var(--ink-3); }
+  .backdrop { position: absolute; left: 0; top: 0; overflow: hidden; pointer-events: none; }
+  .backdrop .hl { color: transparent; }
+  .backdrop mark { color: transparent; background: var(--tag); border-radius: 5px; box-shadow: 0 0 0 1px var(--tag); }
+  .backdrop mark.bad { background: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+
+  .editor-foot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .count { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .count.over { color: var(--bad-ink); }
+  .spacer { flex: 1; }
+  .shortcut { color: var(--ink-3); font-size: 12px; }
+  .btn-primary { background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 9px 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+  .btn-primary:disabled { opacity: .35; }
+  .btn-secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); border-radius: 999px; padding: 8px 16px; font-weight: 500; }
+  .btn-secondary:hover { background: var(--soft); }
+  .btn-secondary:disabled { opacity: .5; }
+  .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; display: none; }
+  .busy .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress { padding: 0 16px 14px; display: none; }
+  .progress.show { display: block; }
+  .bar { height: 4px; background: var(--soft); border-radius: 4px; overflow: hidden; position: relative; }
+  .bar > div { height: 100%; width: 0; background: var(--ink); border-radius: 4px; transition: width .45s linear; }
+  .bar.indeterminate > div { width: 30%; position: absolute; animation: slide 1.2s ease-in-out infinite; transition: none; }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
+  .progress-text { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  .notice { margin: 0 16px 14px; padding: 8px 12px; border-radius: 10px; font-size: 13px; display: none; }
+  .notice.show { display: block; }
+  .notice.warn { background: var(--warn); color: var(--warn-ink); }
+  .notice.error { background: var(--bad); color: var(--bad-ink); }
+  .notice.info { background: var(--soft); color: var(--ink-2); }
+
+  /* side panel */
+  .side { display: flex; flex-direction: column; min-height: calc(100vh - 170px); }
+  .tabs { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); }
+  .tab { flex: 1; border: 0; background: transparent; padding: 7px; border-radius: 9px; color: var(--ink-2); font-weight: 500; }
+  .tab.active { background: var(--soft); color: var(--ink); }
+  .pane { padding: 16px; display: none; flex-direction: column; gap: 20px; overflow-y: auto; }
+  .pane.active { display: flex; }
+  .field > .field-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .field-head h3 { font-size: 13px; font-weight: 600; margin: 0; }
+  .field-head .val { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--ink-3); font-size: 12px; }
+  .icon-btn { border: 0; background: transparent; width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; color: var(--ink-2); }
+  .icon-btn:hover { background: var(--soft); color: var(--ink); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  .voices { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+  .voice { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; }
+  .voice:hover { background: var(--soft); }
+  .voice.selected { border-color: var(--ink); background: var(--panel); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 13px; }
+  .voice .meta { flex: 1; min-width: 0; }
+  .voice .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .voice .file { color: var(--ink-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { color: var(--ink-3); font-size: 13px; padding: 10px 4px; }
+
+  .segmented { display: flex; background: var(--soft); border-radius: 10px; padding: 3px; }
+  .segmented button { flex: 1; border: 0; background: transparent; padding: 7px 8px; border-radius: 8px; color: var(--ink-2); font-weight: 500; }
+  .segmented button.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .model-desc { margin-top: 6px; }
+
+  input[type=range] { width: 100%; accent-color: var(--ink); margin: 0; }
+  .range-ends { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 11.5px; margin-top: 2px; }
+  .disabled { opacity: .4; pointer-events: none; }
+  input[type=number] { width: 100%; border: 1px solid var(--line-2); border-radius: 10px; padding: 7px 10px; font: inherit; background: var(--panel); }
+  .link { border: 0; background: none; color: var(--ink-2); font-size: 12.5px; text-decoration: underline; padding: 0; align-self: flex-start; }
+
+  .history { display: flex; flex-direction: column; }
+  .h-item { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  .h-item:last-child { border-bottom: 0; }
+  .h-item .meta { flex: 1; min-width: 0; }
+  .h-item .name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .h-item.playing .name { color: var(--tag-ink); }
+
+  /* player */
+  .player { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 24px; display: none; align-items: center; gap: 16px; z-index: 5; }
+  .player.show { display: flex; }
+  .player .meta { min-width: 0; width: 260px; }
+  .player .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player audio { flex: 1; height: 40px; min-width: 0; }
+  .player a.icon-btn { text-decoration: none; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 16px 16px 150px; }
+    .editor-card, .side { min-height: 0; }
+    .editor { min-height: 280px; }
+    .player { flex-wrap: wrap; padding: 10px 16px; gap: 8px; }
+    .player .meta { width: auto; flex: 1; }
+    .player audio { flex-basis: 100%; order: 3; }
+    .shortcut { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span><i style="height:7px"></i><i style="height:13px"></i><i style="height:9px"></i><i style="height:5px"></i></span></div>
+  <h1>Text to Speech</h1>
+  <span class="sub">voice-tool · local Chatterbox</span>
+</header>
+
+<main>
+  <section class="card editor-card">
+    <div class="tags" id="tags"></div>
+    <div class="editor">
+      <div class="backdrop" id="backdrop" aria-hidden="true"><div class="hl" id="hl"></div></div>
+      <textarea id="text" spellcheck="true" placeholder="Start typing here or paste any text you want to turn into lifelike speech…"></textarea>
+    </div>
+    <div class="notice warn" id="warn"></div>
+    <div class="notice error" id="error"></div>
+    <div class="notice info" id="info"></div>
+    <div class="progress" id="progress">
+      <div class="bar" id="bar"><div></div></div>
+      <div class="progress-text"><span id="ptext"></span><span id="ptime"></span></div>
+    </div>
+    <div class="editor-foot">
+      <span class="count" id="count">0 / 5,000</span>
+      <span class="spacer"></span>
+      <span class="shortcut" id="shortcut">⌘ + Enter</span>
+      <button class="btn-secondary" id="cancel" hidden title="Stop this generation and free the memory (Esc)">Cancel</button>
+      <button class="btn-primary" id="gen" disabled><span class="spinner"></span><span id="genLabel">Generate speech</span></button>
+    </div>
+  </section>
+
+  <aside class="card side">
+    <div class="tabs">
+      <button class="tab active" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="history">History</button>
+    </div>
+
+    <div class="pane active" id="pane-settings">
+      <div class="field">
+        <div class="field-head">
+          <h3>Voice</h3>
+          <button class="icon-btn" id="reloadVoices" title="Reload the voices folder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+          </button>
+        </div>
+        <div class="voices" id="voices"></div>
+        <div class="muted" id="voicesHint" style="margin-top:6px"></div>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><h3>Model</h3></div>
+        <div class="segmented" id="engine">
+          <button data-v="standard">Standard</button>
+          <button data-v="turbo">Turbo</button>
+        </div>
+        <div class="muted model-desc" id="modelDesc"></div>
+      </div>
+
+      <div class="field" id="emotionField">
+        <div class="field-head"><h3>Emotion</h3><span class="val" id="emotionVal"></span></div>
+        <input type="range" id="emotion" min="0.25" max="1.2" step="0.05">
+        <div class="range-ends"><span>Calm</span><span>Expressive</span></div>
+      </div>
+
+      <div class="field" id="paceField">
+        <div class="field-head"><h3>Pace</h3><span class="val" id="paceVal"></span></div>
+        <input type="range" id="pace" min="0.2" max="0.8" step="0.05">
+        <div class="range-ends"><span>Slower</span><span>Faster</span></div>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><h3>Format</h3></div>
+        <div class="segmented" id="format">
+          <button data-v="mp3">MP3</button>
+          <button data-v="wav">WAV</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><h3>Seed</h3><span class="val">0 = new take every time</span></div>
+        <input type="number" id="seed" min="0" step="1" inputmode="numeric">
+      </div>
+
+      <button class="link" id="reset">Reset values</button>
+    </div>
+
+    <div class="pane" id="pane-history">
+      <div class="history" id="history"></div>
+    </div>
+  </aside>
+</main>
+
+<div class="player" id="player">
+  <div class="meta"><div class="name" id="pName"></div><div class="muted" id="pMeta"></div></div>
+  <audio id="audio" controls preload="metadata"></audio>
+  <a class="icon-btn" id="pDownload" title="Download" download>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+  </a>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const DEFAULTS = { engine: "standard", emotion: 0.55, pace: 0.5, format: "mp3", seed: 0 };
+  const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.52.85l10.4-6.5a1 1 0 0 0 0-1.7L9.52 4.65A1 1 0 0 0 8 5.5z"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+  const ICON_DL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("vt." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("vt." + k, JSON.stringify(v)); } catch {} },
+  };
+
+  let cfg = null;
+  const state = {
+    voice: store.get("voice", ""),
+    engine: store.get("engine", DEFAULTS.engine),
+    emotion: store.get("emotion", DEFAULTS.emotion),
+    pace: store.get("pace", DEFAULTS.pace),
+    format: store.get("format", DEFAULTS.format),
+    seed: store.get("seed", DEFAULTS.seed),
+  };
+  let busy = false;
+  const preview = new Audio();
+  let previewing = null;
+
+  const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const normTag = (t) => t.toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+
+  async function api(path, opts) {
+    const r = await fetch(path, opts);
+    let data = null;
+    try { data = await r.json(); } catch {}
+    if (!r.ok) throw new Error((data && data.error) || `Request failed (${r.status})`);
+    return data;
+  }
+
+  function show(el, msg) { el.textContent = msg || ""; el.classList.toggle("show", !!msg); }
+
+  // ── tags toolbar ────────────────────────────────────────────────────
+  function validTags() {
+    if (!cfg) return new Set();
+    const t = cfg.tags;
+    return new Set(state.engine === "turbo" ? [...t.styles, ...t.sounds, ...t.pauses] : [...t.tones, ...t.pauses]);
+  }
+
+  function renderTags() {
+    const t = cfg.tags;
+    const rows = state.engine === "turbo"
+      ? [["Style", t.styles], ["Sounds", t.sounds], ["Pause", t.pauses]]
+      : [["Tone", t.tones], ["Pause", t.pauses]];
+    const hint = state.engine === "turbo"
+      ? "Turbo reads tags exactly where you put them, e.g. “That’s hilarious [laugh] anyway…”"
+      : "A tone tag changes the delivery from that point on, e.g. “[calm] Welcome back. [excited] Big news!”";
+    $("tags").innerHTML = rows.map(([label, list]) =>
+      `<div class="tag-row"><span class="label">${label}</span>${list.map((x) =>
+        `<button class="chip" data-tag="${esc(x)}">[${esc(x)}]</button>`).join("")}</div>`).join("")
+      + `<div class="tag-hint">${esc(hint)}</div>`;
+  }
+
+  $("tags").addEventListener("mousedown", (e) => { if (e.target.closest(".chip")) e.preventDefault(); }); // keep caret
+  $("tags").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (chip) insertTag(chip.dataset.tag);
+  });
+
+  function insertTag(tag) {
+    const ta = $("text");
+    ta.focus();
+    const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+    const before = v.slice(0, s), after = v.slice(e);
+    const pre = before && !/\s$/.test(before) ? " " : "";
+    const post = !after || !/^\s/.test(after) ? " " : "";
+    const ins = `${pre}[${tag}]${post}`;
+    if (!document.execCommand || !document.execCommand("insertText", false, ins)) {  // execCommand keeps undo
+      ta.setRangeText(ins, s, e, "end");
+    }
+    onTextChange();
+  }
+
+  // ── editor with tag highlighting ────────────────────────────────────
+  const ta = $("text"), hl = $("hl"), backdrop = $("backdrop");
+
+  function renderHighlight() {
+    const ok = validTags();
+    const v = ta.value;
+    let html = "", pos = 0;
+    for (const m of v.matchAll(/\[([A-Za-z][A-Za-z ]{0,30})\]/g)) {
+      html += esc(v.slice(pos, m.index));
+      html += `<mark class="${ok.has(normTag(m[1])) ? "" : "bad"}">${esc(m[0])}</mark>`;
+      pos = m.index + m[0].length;
+    }
+    hl.innerHTML = html + esc(v.slice(pos)) + "\n ";
+    syncBackdrop();
+  }
+
+  function syncBackdrop() {
+    backdrop.style.width = ta.clientWidth + "px";
+    backdrop.style.height = ta.clientHeight + "px";
+    hl.style.transform = `translateY(${-ta.scrollTop}px)`;
+  }
+
+  function onTextChange() {
+    const n = ta.value.length, max = cfg ? cfg.max_chars : 5000;
+    const c = $("count");
+    c.textContent = `${n.toLocaleString()} / ${max.toLocaleString()}`;
+    c.classList.toggle("over", n > max);
+    store.set("text", ta.value);
+    renderHighlight();
+    updateGenerateButton();
+  }
+
+  ta.addEventListener("input", onTextChange);
+  ta.addEventListener("scroll", syncBackdrop);
+  window.addEventListener("resize", syncBackdrop);
+  if (window.ResizeObserver) new ResizeObserver(syncBackdrop).observe(ta);
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); generate(); }
+  });
+  if (!/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) $("shortcut").textContent = "Ctrl + Enter";
+
+  // ── voices ──────────────────────────────────────────────────────────
+  function avatarStyle(name) {
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return `background: linear-gradient(135deg, hsl(${h} 75% 62%), hsl(${(h + 50) % 360} 70% 48%))`;
+  }
+
+  function renderVoices() {
+    const list = $("voices");
+    if (!cfg.voices.length) {
+      list.innerHTML = `<div class="empty">No voice samples yet. Add a clean 10–30 s recording (WAV or MP3) to the voices folder, then press reload.</div>`;
+    } else {
+      list.innerHTML = cfg.voices.map((v) => `
+        <div class="voice ${v.file === state.voice ? "selected" : ""}" data-file="${esc(v.file)}" role="button" tabindex="0">
+          <div class="avatar" style="${avatarStyle(v.name)}">${esc(v.name.charAt(0).toUpperCase())}</div>
+          <div class="meta"><div class="name">${esc(v.name)}</div><div class="file">${esc(v.file)}</div></div>
+          <button class="icon-btn preview" title="Preview sample">${previewing === v.file ? ICON_PAUSE : ICON_PLAY}</button>
+        </div>`).join("");
+    }
+    $("voicesHint").textContent = `Samples are loaded from ${cfg.voices_dir}`;
+  }
+
+  $("voices").addEventListener("click", (e) => {
+    const row = e.target.closest(".voice");
+    if (!row) return;
+    const file = row.dataset.file;
+    if (e.target.closest(".preview")) { togglePreview(file); return; }
+    selectVoice(file);
+  });
+  $("voices").addEventListener("keydown", (e) => {
+    const row = e.target.closest(".voice");
+    if (row && (e.key === "Enter" || e.key === " ") && e.target === row) { e.preventDefault(); selectVoice(row.dataset.file); }
+  });
+
+  function selectVoice(file) {
+    state.voice = file; store.set("voice", file);
+    renderVoices(); updateGenerateButton();
+  }
+
+  function togglePreview(file) {
+    if (previewing === file) { preview.pause(); return; }
+    const v = cfg.voices.find((x) => x.file === file);
+    $("audio").pause();
+    preview.src = v.url;
+    previewing = file;
+    preview.play().catch(() => { previewing = null; renderVoices(); });
+    renderVoices();
+  }
+  preview.addEventListener("pause", () => { if (preview.paused) { previewing = null; renderVoices(); } });
+  preview.addEventListener("ended", () => { previewing = null; renderVoices(); });
+
+  async function loadConfig() {
+    try {
+      cfg = await api("/api/config");
+    } catch (err) {
+      show($("error"), "Could not reach the voice-tool server. Is `make ui` still running?");
+      return;
+    }
+    show($("error"), "");
+    const files = cfg.voices.map((v) => v.file);
+    if (!files.includes(state.voice)) state.voice = cfg.default_voice;
+    renderVoices(); renderTags(); onTextChange();
+    if (cfg.active_job && !busy) track(cfg.active_job, state.engine, ta.value.length);
+  }
+  $("reloadVoices").addEventListener("click", loadConfig);
+
+  // ── settings ────────────────────────────────────────────────────────
+  function setSegmented(id, value) {
+    for (const b of $(id).querySelectorAll("button")) b.classList.toggle("active", b.dataset.v === value);
+  }
+
+  function applySettings() {
+    setSegmented("engine", state.engine);
+    setSegmented("format", state.format);
+    $("emotion").value = state.emotion; $("emotionVal").textContent = Number(state.emotion).toFixed(2);
+    $("pace").value = state.pace; $("paceVal").textContent = Number(state.pace).toFixed(2);
+    $("seed").value = state.seed;
+    const turbo = state.engine === "turbo";
+    $("emotionField").classList.toggle("disabled", turbo);
+    $("paceField").classList.toggle("disabled", turbo);
+    $("modelDesc").textContent = turbo
+      ? "Faster. Supports style and sound tags like [laugh] or [whispering]. Ignores Emotion and Pace."
+      : "Best quality. Emotion and Pace sliders, plus tone tags like [calm] or [excited].";
+    if (cfg) { renderTags(); renderHighlight(); }
+  }
+
+  for (const id of ["engine", "format"]) {
+    $(id).addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (id === "engine" && state.engine !== b.dataset.v) show($("warn"), "");  // warnings were for the other model
+      state[id] = b.dataset.v; store.set(id, b.dataset.v); applySettings();
+    });
+  }
+  for (const id of ["emotion", "pace"]) {
+    $(id).addEventListener("input", (e) => {
+      state[id] = Number(e.target.value); store.set(id, state[id]);
+      $(id + "Val").textContent = state[id].toFixed(2);
+    });
+  }
+  $("seed").addEventListener("input", (e) => {
+    const n = Math.max(0, Math.floor(Number(e.target.value) || 0));
+    state.seed = n; store.set("seed", n);
+  });
+  $("reset").addEventListener("click", () => {
+    Object.assign(state, DEFAULTS);
+    for (const k of Object.keys(DEFAULTS)) store.set(k, DEFAULTS[k]);
+    applySettings();
+  });
+
+  // ── tabs ────────────────────────────────────────────────────────────
+  for (const t of document.querySelectorAll(".tab")) {
+    t.addEventListener("click", () => {
+      for (const x of document.querySelectorAll(".tab")) x.classList.toggle("active", x === t);
+      for (const p of document.querySelectorAll(".pane")) p.classList.toggle("active", p.id === "pane-" + t.dataset.tab);
+      if (t.dataset.tab === "history") loadHistory();
+    });
+  }
+
+  // ── history + player ────────────────────────────────────────────────
+  const audio = $("audio");
+  let current = null, historyItems = [], hideTimer = 0;
+
+  function ago(ts) {
+    const s = Math.max(0, Date.now() / 1000 - ts);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    return new Date(ts * 1000).toLocaleDateString();
+  }
+  const size = (b) => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
+  const mediaUrl = (item) => `/media/out/${encodeURIComponent(item.name)}`;
+
+  async function loadHistory() {
+    let items;
+    try { items = await api("/api/history"); } catch { return; }
+    historyItems = items;
+    $("history").innerHTML = items.length ? items.map((it) => `
+      <div class="h-item ${current === it.name ? "playing" : ""}" data-name="${esc(it.name)}">
+        <button class="icon-btn play" title="Play">${ICON_PLAY}</button>
+        <div class="meta"><div class="name">${esc(it.name)}</div><div class="muted">${ago(it.mtime)} · ${size(it.size)}</div></div>
+        <a class="icon-btn" href="${mediaUrl(it)}" download="${esc(it.name)}" title="Download">${ICON_DL}</a>
+      </div>`).join("") : `<div class="empty">Nothing generated yet.</div>`;
+  }
+
+  $("history").addEventListener("click", (e) => {
+    const btn = e.target.closest(".play");
+    if (!btn) return;
+    const name = btn.closest(".h-item").dataset.name;
+    const it = historyItems.find((x) => x.name === name);
+    if (it) play(it, `${ago(it.mtime)} · ${size(it.size)}`);
+  });
+
+  function play(item, meta) {
+    preview.pause();
+    current = item.name;
+    audio.src = mediaUrl(item);
+    $("pName").textContent = item.name;
+    $("pMeta").textContent = meta || "";
+    $("pDownload").href = mediaUrl(item);
+    $("pDownload").setAttribute("download", item.name);
+    $("player").classList.add("show");
+    audio.play().catch(() => {});   // autoplay can be blocked; the controls are there
+    for (const el of document.querySelectorAll(".h-item")) el.classList.toggle("playing", el.dataset.name === current);
+  }
+
+  // ── generate + progress ─────────────────────────────────────────────
+  function updateGenerateButton() {
+    const n = ta.value.trim().length;
+    $("gen").disabled = busy || !n || !state.voice || (cfg && ta.value.length > cfg.max_chars);
+  }
+
+  function setBusy(on) {
+    busy = on;
+    $("cancel").hidden = !on;
+    $("cancel").disabled = !on || !currentJob;
+    $("cancel").textContent = "Cancel";
+    $("gen").classList.toggle("busy", on);
+    $("genLabel").textContent = on ? "Generating…" : "Generate speech";
+    updateGenerateButton();
+  }
+
+  const prog = { el: $("progress"), bar: $("bar"), fill: $("bar").firstElementChild };
+  function progressShow(mode, pct, text, time) {
+    clearTimeout(hideTimer);
+    prog.el.classList.add("show");
+    prog.bar.classList.toggle("indeterminate", mode === "indeterminate");
+    if (mode !== "indeterminate") prog.fill.style.width = `${Math.min(100, pct)}%`;
+    $("ptext").textContent = text;
+    $("ptime").textContent = time || "";
+  }
+  function progressHide() { prog.el.classList.remove("show"); prog.fill.style.width = "0"; }
+
+  let currentJob = null;
+
+  async function cancelJob() {
+    if (!currentJob || $("cancel").disabled) return;
+    $("cancel").disabled = true;
+    $("cancel").textContent = "Cancelling…";
+    try { await api(`/api/jobs/${currentJob}/cancel`, { method: "POST" }); }
+    catch (err) { show($("error"), err.message); $("cancel").disabled = false; $("cancel").textContent = "Cancel"; }
+  }
+  $("cancel").addEventListener("click", cancelJob);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && busy) cancelJob(); });
+
+  async function generate() {
+    if ($("gen").disabled) return;
+    show($("error"), ""); show($("warn"), ""); show($("info"), "");
+    setBusy(true);
+    progressShow("indeterminate", 0, "Starting…");
+    const textLen = ta.value.length;
+    let job;
+    try {
+      job = await api("/api/generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: ta.value, voice: state.voice, engine: state.engine, emotion: state.emotion,
+                               pace: state.pace, format: state.format, seed: state.seed }),
+      });
+    } catch (err) {
+      show($("error"), err.message); progressHide(); setBusy(false); return;
+    }
+    if (job.warnings && job.warnings.length) show($("warn"), job.warnings.join(" · "));
+    await track(job.id, state.engine, ta.value.length);
+  }
+
+  // Polls a job until it finishes. Also used after a page reload to pick up a generation still running.
+  async function track(jobId, engine, textLen) {
+    currentJob = jobId;
+    setBusy(true);
+    // Smooth progress: whole chunks are exact; inside a chunk we estimate from the time previous chunks took.
+    let lastDone = -1, lastAt = 0, genStart = 0, shown = 0;
+    const firstGuess = engine === "turbo" ? 0.1 : 0.25;   // rough seconds per character before any chunk is done
+    while (true) {
+      let j;
+      try { j = await api(`/api/jobs/${jobId}`); }
+      catch (err) {
+        if (/not found/i.test(err.message)) { show($("error"), "The server restarted and lost this job. Please try again."); break; }
+        await new Promise((r) => setTimeout(r, 1000)); continue;
+      }
+      const t = `${Math.round(j.elapsed)}s`;
+      if (j.status === "queued") progressShow("indeterminate", 0, "Waiting for the previous generation…");
+      else if (j.status === "loading") progressShow("indeterminate", 0, `Loading the ${engine} model (first run can take a minute)…`, t);
+      else if (j.status === "generating" && j.total) {
+        const now = performance.now() / 1000;
+        if (!genStart) genStart = now;
+        if (j.done !== lastDone) { lastDone = j.done; lastAt = now; }
+        const perChunk = j.done > 0 ? (lastAt - genStart) / j.done : Math.max(2, firstGuess * textLen / j.total);
+        const within = Math.min(0.92, (now - lastAt) / perChunk);
+        shown = Math.max(shown, ((j.done + (j.done < j.total ? within : 0)) / j.total) * 100);
+        const label = j.done >= j.total ? "Saving…" : `Generating · part ${Math.min(j.done + 1, j.total)} of ${j.total}`;
+        progressShow("determinate", shown, label, t);
+      } else if (j.status === "done") {
+        progressShow("determinate", 100, "Done", `${j.result.took_s}s`);
+        const r = j.result;
+        play(r, `${r.duration_s}s audio · generated in ${r.took_s}s`);
+        if (r.note) show($("warn"), r.note);
+        loadHistory();
+        hideTimer = setTimeout(progressHide, 1200);
+        break;
+      } else if (j.status === "error") {
+        show($("error"), j.error); progressHide(); break;
+      } else if (j.status === "cancelled") {
+        show($("info"), j.started ? "Generation cancelled and the model was unloaded to free memory. The next one reloads it (about 30 s)."
+                                  : "Generation cancelled.");
+        progressHide(); break;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    currentJob = null;
+    setBusy(false);
+  }
+  $("gen").addEventListener("click", generate);
+
+  // ── start ───────────────────────────────────────────────────────────
+  ta.value = store.get("text", "");
+  applySettings();
+  loadConfig();
+  loadHistory();
+})();
+</script>
+</body>
+</html>

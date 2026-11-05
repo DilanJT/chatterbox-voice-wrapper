@@ -12,6 +12,7 @@ Commands:
   unregister  remove it again
   doctor      show what this machine will use (OS, GPU, Python, voices, ffmpeg)
   speak       generate from the terminal: speak "Text" [--emotion 0.7 --mp3 ...]
+  ui          start the web UI (ElevenLabs-style) at http://127.0.0.1:7860
   clean       delete .venv (keeps models and voices)
   clean-all   delete .venv and the downloaded models
 
@@ -19,6 +20,7 @@ Environment overrides:
   TORCH=auto|default|cpu|cu118|cu121|cu124   which PyTorch build to install (default auto)
   SKIP_MODELS=1                             setup without downloading the models
   VOICE_TOOL_DEVICE=cuda|mps|cpu            force the device at runtime
+  UI_PORT=7861                              port for the web UI (default 7860)
 """
 import json, os, platform, shutil, subprocess, sys, time
 from pathlib import Path
@@ -223,6 +225,15 @@ def cmd_speak(args):
     run([PY, ROOT / "speak.py", *args], cwd=ROOT, env=env_for_runtime())
 
 
+def cmd_ui():
+    _need_venv()
+    say("Starting the voice-tool web UI (Ctrl+C to stop)")
+    try:
+        run([PY, ROOT / "voice_ui.py"], cwd=ROOT, env=env_for_runtime())
+    except KeyboardInterrupt:
+        print("\nUI stopped.")
+
+
 def cmd_clean(all_=False):
     if VENV.exists():
         shutil.rmtree(VENV); print("removed .venv")
@@ -241,6 +252,7 @@ def cmd_setup():
     print("1. Put a clean 10-30 s recording of the voice in voices/ (e.g. voices/my_voice.wav)")
     print("2. make test            -> renders VoiceOvers/_test_my_voice.mp3")
     print("3. Restart Claude and ask: 'generate a voiceover in my voice: ...'")
+    print("4. make ui              -> web UI in your browser")
 
 
 def main():
@@ -249,7 +261,8 @@ def main():
     cmd, args = sys.argv[1], [a for a in sys.argv[2:] if a.strip()]
     table = {"setup": cmd_setup, "install": cmd_install, "models": cmd_models, "test": cmd_test,
              "register": cmd_register, "unregister": cmd_unregister, "doctor": cmd_doctor,
-             "clean": cmd_clean, "clean-all": lambda: cmd_clean(True), "speak": lambda: cmd_speak(args)}
+             "clean": cmd_clean, "clean-all": lambda: cmd_clean(True), "speak": lambda: cmd_speak(args),
+             "ui": cmd_ui}
     if cmd not in table:
         sys.exit(f"unknown command {cmd!r}. Try: {', '.join(table)}")
     try:
